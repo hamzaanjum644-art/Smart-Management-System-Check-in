@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Management System - Teacher Check-in</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#1e293b;border-radius:16px;padding:32px 24px;max-width:380px;width:100%;text-align:center}
+.logo{font-size:28px;font-weight:700;color:#38bdf8;margin-bottom:4px}
+.subtitle{font-size:13px;color:#94a3b8;margin-bottom:24px}
+.status{padding:14px 18px;border-radius:10px;margin-bottom:20px;font-size:14px;line-height:1.5}
+.status.checking{background:#1e3a5f;color:#7dd3fc}
+.status.success{background:#14532d;color:#86efac}
+.status.error{background:#7f1d1d;color:#fca5a5}
+.status.done{background:#1e3a5f;color:#7dd3fc}
+.distance{font-size:12px;color:#64748b;margin-bottom:16px}
+select{width:100%;padding:14px 16px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:15px;margin-bottom:16px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center}
+select:focus{outline:none;border-color:#38bdf8}
+.btn{width:100%;padding:14px;border-radius:10px;border:none;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.2s}
+.btn-primary{background:#38bdf8;color:#0f172a}
+.btn-primary:hover{background:#7dd3fc}
+.btn-primary:disabled{background:#334155;color:#64748b;cursor:not-allowed}
+.btn-retry{background:#334155;color:#e2e8f0;margin-top:12px}
+.hidden{display:none}
+.time{font-size:32px;font-weight:700;color:#38bdf8;margin:8px 0}
+.checkin-info{font-size:13px;color:#94a3b8}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid #7dd3fc;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="logo">Smart Management System</div>
+<div class="subtitle">Teacher Check-in System</div>
+
+<div id="step-location">
+<div id="loc-status" class="status checking"><span class="spinner"></span>Getting your location...</div>
+<div id="loc-distance" class="distance"></div>
+<button id="retry-btn" class="btn btn-retry hidden" onclick="getLocation()">Try again</button>
+</div>
+
+<div id="step-form" class="hidden">
+<div class="status success">You are at school. Ready to check in!</div>
+<select id="teacher-select">
+<option value="">Select your name</option>
+<option>Mr. Zaheer Abbas</option>
+<option>Ms. Sadia Naz</option>
+<option>Mr. Faisal Qureshi</option>
+<option>Ms. Rabia Khatoon</option>
+<option>Mr. Waqas Ali</option>
+<option>Ms. Nazia Parveen</option>
+<option>Mr. Kashif Raza</option>
+<option>Ms. Tahira Begum</option>
+</select>
+<button id="checkin-btn" class="btn btn-primary" disabled onclick="checkIn()">Check In</button>
+</div>
+
+<div id="step-done" class="hidden">
+<div class="status done">Check-in successful!</div>
+<div class="time" id="checkin-time"></div>
+<div class="checkin-info" id="checkin-name"></div>
+<div class="checkin-info" id="checkin-status-text"></div>
+</div>
+</div>
+
+<script>
+// ===== CONFIGURATION =====
+const SCHOOL_LAT = 34.145134;
+const SCHOOL_LNG = 73.216374;
+const MAX_DISTANCE_METERS = 50;
+const ON_TIME_HOUR = 8; // 8:00 AM
+const WEBHOOK_URL = 'https://gaiterless-blondell-suboptical.ngrok-free.dev/webhook/teacher-checkin';
+
+// Calculate distance between two GPS points (Haversine formula)
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getLocation() {
+  const status = document.getElementById('loc-status');
+  const distEl = document.getElementById('loc-distance');
+  const retryBtn = document.getElementById('retry-btn');
+  
+  status.className = 'status checking';
+  status.innerHTML = '<span class="spinner"></span>Getting your location...';
+  distEl.textContent = '';
+  retryBtn.classList.add('hidden');
+
+  if (!navigator.geolocation) {
+    status.className = 'status error';
+    status.textContent = 'GPS not supported on this device.';
+    retryBtn.classList.remove('hidden');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const dist = getDistance(pos.coords.latitude, pos.coords.longitude, SCHOOL_LAT, SCHOOL_LNG);
+      const distRound = Math.round(dist);
+
+      if (dist <= MAX_DISTANCE_METERS) {
+        document.getElementById('step-location').classList.add('hidden');
+        document.getElementById('step-form').classList.remove('hidden');
+      } else {
+        status.className = 'status error';
+        status.textContent = 'You are too far from school. Move closer and try again.';
+        distEl.textContent = 'Distance: ' + distRound + ' meters from school (max: ' + MAX_DISTANCE_METERS + 'm)';
+        retryBtn.classList.remove('hidden');
+      }
+    },
+    (err) => {
+      status.className = 'status error';
+      if (err.code === 1) {
+        status.textContent = 'Location permission denied. Please allow GPS access and try again.';
+      } else if (err.code === 2) {
+        status.textContent = 'Could not get your location. Make sure GPS is on.';
+      } else {
+        status.textContent = 'Location request timed out. Try again.';
+      }
+      retryBtn.classList.remove('hidden');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+document.getElementById('teacher-select').addEventListener('change', function() {
+  document.getElementById('checkin-btn').disabled = !this.value;
+});
+
+function checkIn() {
+  const teacher = document.getElementById('teacher-select').value;
+  if (!teacher) return;
+
+  const btn = document.getElementById('checkin-btn');
+  btn.disabled = true;
+  btn.textContent = 'Checking in...';
+
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Karachi'});
+  const dateStr = now.toLocaleDateString('en-CA', {timeZone: 'Asia/Karachi'});
+  
+  // Determine status based on Pakistan time
+  const pkNow = new Date(now.toLocaleString('en-US', {timeZone: 'Asia/Karachi'}));
+  const pkHours = pkNow.getHours();
+  const pkMinutes = pkNow.getMinutes();
+  const isLate = pkHours > ON_TIME_HOUR || (pkHours === ON_TIME_HOUR && pkMinutes > 0);
+
+  const data = {
+    teacherName: teacher,
+    date: dateStr,
+    checkInTime: timeStr,
+    status: isLate ? 'Late' : 'On Time'
+  };
+
+  fetch(WEBHOOK_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(() => {
+    document.getElementById('step-form').classList.add('hidden');
+    document.getElementById('step-done').classList.remove('hidden');
+    document.getElementById('checkin-time').textContent = timeStr;
+    document.getElementById('checkin-name').textContent = teacher;
+    document.getElementById('checkin-status-text').textContent = isLate ? 'Status: LATE' : 'Status: On Time';
+    document.getElementById('checkin-status-text').style.color = isLate ? '#fca5a5' : '#86efac';
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.textContent = 'Check In';
+    alert('Network error. Please try again.');
+  });
+}
+
+getLocation();
+</script>
+</body>
+</html>
