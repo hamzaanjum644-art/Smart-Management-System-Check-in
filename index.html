@@ -144,11 +144,19 @@ function checkIn() {
   btn.disabled = true;
   btn.textContent = 'Checking in...';
 
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const timeStr = now.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Karachi'});
-  const dateStr = now.toLocaleDateString('en-CA', {timeZone: 'Asia/Karachi'});
+ const now = new Date();
+
+// Get Pakistan time (Asia/Karachi = UTC+5, no DST)
+const pakistanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
+const hour = pakistanTime.getHours();
+const minute = pakistanTime.getMinutes();
+
+// Must be between 5 AM and cutoff time to be "On Time"
+const isOnTime = 
+  hour >= 5 &&  // ← prevents midnight/late night false "On Time"
+  (hour < ON_TIME_HOUR || (hour === ON_TIME_HOUR && minute <= ON_TIME_MINUTE));
+
+const status = isOnTime ? 'On Time' : 'Late';
   
   // Determine status based on Pakistan time
   const pkNow = new Date(now.toLocaleString('en-US', {timeZone: 'Asia/Karachi'}));
