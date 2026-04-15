@@ -32,37 +32,40 @@ select:focus{outline:none;border-color:#38bdf8}
 </head>
 <body>
 <div class="card">
-<div class="logo">Smart Management System</div>
-<div class="subtitle">Teacher Check-in System</div>
+  <div class="logo">Smart Management System</div>
+  <div class="subtitle">Teacher Check-in System</div>
 
-<div id="step-location">
-<div id="loc-status" class="status checking"><span class="spinner"></span>Getting your location...</div>
-<div id="loc-distance" class="distance"></div>
-<button id="retry-btn" class="btn btn-retry hidden" onclick="getLocation()">Try again</button>
-</div>
+  <!-- Step 1: Location -->
+  <div id="step-location">
+    <div id="loc-status" class="status checking"><span class="spinner"></span>Getting your location...</div>
+    <div id="loc-distance" class="distance"></div>
+    <button id="retry-btn" class="btn btn-retry hidden" onclick="getLocation()">Try again</button>
+  </div>
 
-<div id="step-form" class="hidden">
-<div class="status success">You are at school. Ready to check in!</div>
-<select id="teacher-select">
-<option value="">Select your name</option>
-<option>Mr. Zaheer Abbas</option>
-<option>Ms. Sadia Naz</option>
-<option>Mr. Faisal Qureshi</option>
-<option>Ms. Rabia Khatoon</option>
-<option>Mr. Waqas Ali</option>
-<option>Ms. Nazia Parveen</option>
-<option>Mr. Kashif Raza</option>
-<option>Ms. Tahira Begum</option>
-</select>
-<button id="checkin-btn" class="btn btn-primary" disabled onclick="checkIn()">Check In</button>
-</div>
+  <!-- Step 2: Select Teacher -->
+  <div id="step-form" class="hidden">
+    <div class="status success">You are at school. Ready to check in!</div>
+    <select id="teacher-select">
+      <option value="">Select your name</option>
+      <option>Mr. Zaheer Abbas</option>
+      <option>Ms. Sadia Naz</option>
+      <option>Mr. Faisal Qureshi</option>
+      <option>Ms. Rabia Khatoon</option>
+      <option>Mr. Waqas Ali</option>
+      <option>Ms. Nazia Parveen</option>
+      <option>Mr. Kashif Raza</option>
+      <option>Ms. Tahira Begum</option>
+    </select>
+    <button id="checkin-btn" class="btn btn-primary" disabled onclick="checkIn()">Check In</button>
+  </div>
 
-<div id="step-done" class="hidden">
-<div class="status done">Check-in successful!</div>
-<div class="time" id="checkin-time"></div>
-<div class="checkin-info" id="checkin-name"></div>
-<div class="checkin-info" id="checkin-status-text"></div>
-</div>
+  <!-- Step 3: Done -->
+  <div id="step-done" class="hidden">
+    <div class="status done">Check-in successful!</div>
+    <div class="time" id="checkin-time"></div>
+    <div class="checkin-info" id="checkin-name"></div>
+    <div class="checkin-info" id="checkin-status-text"></div>
+  </div>
 </div>
 
 <script>
@@ -70,11 +73,14 @@ select:focus{outline:none;border-color:#38bdf8}
 const SCHOOL_LAT = 34.145134;
 const SCHOOL_LNG = 73.216374;
 const MAX_DISTANCE_METERS = 40;
-const ON_TIME_HOUR = 7;    // 7:30 AM
-const ON_TIME_MINUTE = 30; // 7:30 AM
+const ON_TIME_HOUR = 7;
+const ON_TIME_MINUTE = 30;
+// Grace period: ±10 mins → hard cutoff = 7:40 AM
+const LATE_CUTOFF_HOUR = 7;
+const LATE_CUTOFF_MINUTE = 40;
 const WEBHOOK_URL = 'https://gaiterless-blondell-suboptical.ngrok-free.dev/webhook/teacher-checkin';
 
-// Calculate distance between two GPS points (Haversine formula)
+// ===== HAVERSINE DISTANCE =====
 function getDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -85,11 +91,12 @@ function getDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// ===== GET LOCATION =====
 function getLocation() {
   const status = document.getElementById('loc-status');
   const distEl = document.getElementById('loc-distance');
   const retryBtn = document.getElementById('retry-btn');
-  
+
   status.className = 'status checking';
   status.innerHTML = '<span class="spinner"></span>Getting your location...';
   distEl.textContent = '';
@@ -132,10 +139,12 @@ function getLocation() {
   );
 }
 
+// ===== TEACHER SELECT ENABLE BUTTON =====
 document.getElementById('teacher-select').addEventListener('change', function() {
   document.getElementById('checkin-btn').disabled = !this.value;
 });
 
+// ===== CHECK IN =====
 function checkIn() {
   const teacher = document.getElementById('teacher-select').value;
   if (!teacher) return;
@@ -144,36 +153,43 @@ function checkIn() {
   btn.disabled = true;
   btn.textContent = 'Checking in...';
 
- const now = new Date();
+  // ✅ Pakistan time (Asia/Karachi = UTC+5, no DST)
+  const now = new Date();
+  const pakistanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
+  const hour = pakistanTime.getHours();
+  const minute = pakistanTime.getMinutes();
 
-// Get Pakistan time (Asia/Karachi = UTC+5, no DST)
-const pakistanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
-const hour = pakistanTime.getHours();
-const minute = pakistanTime.getMinutes();
+  // ✅ Format date: DD/MM/YYYY
+  const day = String(pakistanTime.getDate()).padStart(2, '0');
+  const mon = String(pakistanTime.getMonth() + 1).padStart(2, '0');
+  const year = pakistanTime.getFullYear();
+  const dateStr = `${day}/${mon}/${year}`;
 
-// Must be between 5 AM and cutoff time to be "On Time"
-const isOnTime = 
-  hour >= 5 &&  // ← prevents midnight/late night false "On Time"
-  (hour < ON_TIME_HOUR || (hour === ON_TIME_HOUR && minute <= ON_TIME_MINUTE));
+  // ✅ Format time: HH:MM AM/PM
+  const h12 = hour % 12 || 12;
+  const ampm = hour < 12 ? 'AM' : 'PM';
+  const timeStr = `${String(h12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${ampm}`;
 
-const status = isOnTime ? 'On Time' : 'Late';
-  
-  // Determine status based on Pakistan time
-  const pkNow = new Date(now.toLocaleString('en-US', {timeZone: 'Asia/Karachi'}));
-  const pkHours = pkNow.getHours();
-  const pkMinutes = pkNow.getMinutes();
-  const isLate = pkHours > ON_TIME_HOUR || (pkHours === ON_TIME_HOUR && pkMinutes > 0);
+  // ✅ On-Time logic:
+  // - Must be after 5:00 AM (midnight protection)
+  // - Must be at or before 7:40 AM (7:30 + 10 min grace)
+  const isOnTime =
+    hour >= 5 &&
+    (hour < LATE_CUTOFF_HOUR ||
+    (hour === LATE_CUTOFF_HOUR && minute <= LATE_CUTOFF_MINUTE));
+
+  const status = isOnTime ? 'On Time' : 'Late';
 
   const data = {
     teacherName: teacher,
     date: dateStr,
     checkInTime: timeStr,
-    status: isLate ? 'Late' : 'On Time'
+    status: status
   };
 
   fetch(WEBHOOK_URL, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+    headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
     body: JSON.stringify(data)
   })
   .then(() => {
@@ -181,8 +197,8 @@ const status = isOnTime ? 'On Time' : 'Late';
     document.getElementById('step-done').classList.remove('hidden');
     document.getElementById('checkin-time').textContent = timeStr;
     document.getElementById('checkin-name').textContent = teacher;
-    document.getElementById('checkin-status-text').textContent = isLate ? 'Status: LATE' : 'Status: On Time';
-    document.getElementById('checkin-status-text').style.color = isLate ? '#fca5a5' : '#86efac';
+    document.getElementById('checkin-status-text').textContent = 'Status: ' + status;
+    document.getElementById('checkin-status-text').style.color = isOnTime ? '#86efac' : '#fca5a5';
   })
   .catch(() => {
     btn.disabled = false;
@@ -191,6 +207,7 @@ const status = isOnTime ? 'On Time' : 'Late';
   });
 }
 
+// ===== START =====
 getLocation();
 </script>
 </body>
