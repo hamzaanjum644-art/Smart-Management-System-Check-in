@@ -163,7 +163,10 @@ function checkIn() {
   const day = String(pakistanTime.getDate()).padStart(2, '0');
   const mon = String(pakistanTime.getMonth() + 1).padStart(2, '0');
   const year = pakistanTime.getFullYear();
-  const dateStr = `${day}/${mon}/${year}`;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const dateStr = `${day} ${months[mon - 1]} ${year}`;
 
   // ✅ Format time: HH:MM AM/PM
   const h12 = hour % 12 || 12;
