@@ -163,10 +163,13 @@ function checkIn() {
   const day = String(pakistanTime.getDate()).padStart(2, '0');
   const mon = String(pakistanTime.getMonth() + 1).padStart(2, '0');
   const year = pakistanTime.getFullYear();
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const dateStr = `${day} ${months[mon - 1]} ${year}`;
+ const date = new Date(year, mon - 1, day);
+const dateStr = date.toLocaleDateString("en-GB", {
+  day: "numeric",
+  month: "short",   // ← this gives "Jan", "Feb", etc.
+  year: "numeric"
+});
+// Output: "16 Apr 2026"
 
   // ✅ Format time: HH:MM AM/PM
   const h12 = hour % 12 || 12;
